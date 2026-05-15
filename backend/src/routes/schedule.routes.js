@@ -3,6 +3,7 @@ import { config } from "../config/env.js";
 import { findFreeSlots } from "../utils/freeSlots.js";
 import { formatMinutes } from "../utils/time.js";
 import { orchestrateDay } from "../agents/orchestrator/OrchestratorAgent.js";
+import { persistAndEnrichSchedule } from "../agents/orchestrator/persistSchedule.js";
 import { fetchTodaysEvents, isAuthenticated } from "../services/gcal.service.js";
 
 const router = Router();
@@ -44,10 +45,11 @@ router.post("/generate", async (req, res) => {
     }));
 
     const result = await orchestrateDay({ calendarEvents, freeSlots });
+    const enrichedSchedule = await persistAndEnrichSchedule(result.schedule);
 
     res.json({
       source,
-      schedule: result.schedule,
+      schedule: enrichedSchedule,
       summary: result.summary,
       stats: result.stats,
       deferred: result.deferred,

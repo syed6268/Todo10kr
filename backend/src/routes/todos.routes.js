@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Todo } from "../models/Todo.js";
+import { applyTodoCompletionToGoal } from "../services/progress.service.js";
 
 const router = Router();
 
@@ -38,6 +39,9 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   try {
+    const existing = await Todo.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Todo not found" });
+
     const allowed = ["title", "completed", "priority", "category", "estimatedMinutes"];
     const update = {};
     for (const k of allowed) if (req.body?.[k] !== undefined) update[k] = req.body[k];
@@ -45,8 +49,17 @@ router.patch("/:id", async (req, res) => {
     if (update.completed === false) update.completedAt = null;
 
     const todo = await Todo.findByIdAndUpdate(req.params.id, update, { new: true });
-    if (!todo) return res.status(404).json({ error: "Todo not found" });
-    res.json({ todo });
+
+    let goal = null;
+    if (update.completed !== undefined && existing.goalId) {
+      goal = await applyTodoCompletionToGoal({
+        goalId: existing.goalId,
+        wasCompleted: existing.completed,
+        isCompleted: update.completed,
+      });
+    }
+
+    res.json({ todo, goal });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

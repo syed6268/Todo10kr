@@ -1,12 +1,13 @@
 import { AgentBase } from "../base/AgentBase.js";
 import { GOAL_AGENT_SYSTEM, goalAgentUserPrompt } from "./prompts.js";
+import { fetchRecentCompletions } from "../../services/progress.service.js";
 
 export class GoalAgent extends AgentBase {
   constructor(goal) {
     super({
       name: `GoalAgent:${goal.title}`,
       temperature: 0.7,
-      maxTokens: 700,
+      maxTokens: 800,
     });
     this.goal = goal;
   }
@@ -19,11 +20,28 @@ export class GoalAgent extends AgentBase {
   }
 
   userPrompt(context) {
-    return goalAgentUserPrompt({ goal: this.goal, today: context.today });
+    return goalAgentUserPrompt({
+      goal: this.goal,
+      today: context.today,
+      recentCompletions: context.recentCompletions || [],
+      recentNotes: context.recentNotes || [],
+    });
   }
 }
 
-export async function runGoalAgent(goal, context = { today: new Date() }) {
+async function buildContext(goal, baseContext = {}) {
+  const recentCompletions = await fetchRecentCompletions(goal._id, 5);
+  const recentNotes = (goal.progress?.notes || []).slice(-3).reverse();
+  return {
+    today: baseContext.today || new Date(),
+    recentCompletions,
+    recentNotes,
+    ...baseContext,
+  };
+}
+
+export async function runGoalAgent(goal, baseContext = {}) {
+  const context = await buildContext(goal, baseContext);
   const agent = new GoalAgent(goal);
   const result = await agent.run(context);
 
@@ -33,6 +51,7 @@ export async function runGoalAgent(goal, context = { today: new Date() }) {
     candidates: Array.isArray(result.candidates) ? result.candidates : [],
     progressReport: result.progressReport || "",
     questionForUser: result.questionForUser || "",
+    recentCompletions: context.recentCompletions,
     generatedAt: new Date().toISOString(),
   };
 }

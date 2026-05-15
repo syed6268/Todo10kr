@@ -1,12 +1,27 @@
 import { Router } from "express";
 import { Goal, HORIZONS } from "../models/Goal.js";
 import { runGoalAgent } from "../agents/goal/GoalAgent.js";
+import {
+  appendGoalNote,
+  fetchRecentCompletionsForGoals,
+} from "../services/progress.service.js";
 
 const router = Router();
 
 router.get("/", async (req, res) => {
   try {
-    const goals = await Goal.find().sort({ priority: 1, createdAt: -1 });
+    const goals = await Goal.find()
+      .sort({ priority: 1, createdAt: -1 })
+      .lean({ virtuals: true });
+
+    const byGoal = await fetchRecentCompletionsForGoals(
+      goals.map((g) => g._id),
+      5
+    );
+    for (const g of goals) {
+      g.recentCompletions = byGoal.get(String(g._id)) || [];
+    }
+
     res.json({ goals, horizons: HORIZONS });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -83,6 +98,20 @@ router.delete("/:id", async (req, res) => {
     const goal = await Goal.findByIdAndDelete(req.params.id);
     if (!goal) return res.status(404).json({ error: "Goal not found" });
     res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/:id/notes", async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "text is required" });
+    }
+    const goal = await appendGoalNote(req.params.id, text);
+    if (!goal) return res.status(404).json({ error: "Goal not found" });
+    res.json({ goal });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
