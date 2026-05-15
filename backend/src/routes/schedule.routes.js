@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { dumpTodos, suggestedTodos } from "../data/todos.js";
 import { config } from "../config/env.js";
 import { findFreeSlots } from "../utils/freeSlots.js";
 import { formatMinutes } from "../utils/time.js";
-import { generateSmartSchedule } from "../services/openai.service.js";
+import { orchestrateDay } from "../agents/orchestrator/OrchestratorAgent.js";
 import { fetchTodaysEvents, isAuthenticated } from "../services/gcal.service.js";
 
 const router = Router();
@@ -44,20 +43,17 @@ router.post("/generate", async (req, res) => {
       endLabel: formatMinutes(s.end),
     }));
 
-    const pendingDump = dumpTodos.filter((t) => !t.completed);
-
-    const parsed = await generateSmartSchedule({
-      calendarEvents,
-      freeSlots,
-      dumpTodos: pendingDump,
-      suggestedTodos,
-    });
+    const result = await orchestrateDay({ calendarEvents, freeSlots });
 
     res.json({
       source,
-      schedule: parsed.schedule || [],
-      summary: parsed.summary || "",
-      stats: parsed.stats || {},
+      schedule: result.schedule,
+      summary: result.summary,
+      stats: result.stats,
+      deferred: result.deferred,
+      proposals: result.proposals,
+      recentLoad: result.recentLoad,
+      activeGoals: result.activeGoals,
       calendarEvents,
       freeSlots,
       timestamp: new Date().toISOString(),

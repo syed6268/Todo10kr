@@ -4,6 +4,7 @@ dotenv.config();
 
 export const config = {
   port: parseInt(process.env.PORT || "5001", 10),
+  mongoUri: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/todo10kr",
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
     model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",
