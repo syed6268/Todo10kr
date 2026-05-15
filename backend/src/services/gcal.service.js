@@ -1,8 +1,10 @@
 import { google } from "googleapis";
 import { config, assertGoogleOAuth } from "../config/env.js";
 import { getStoredTokens, saveTokens } from "../data/tokenStore.js";
+import { parseTimeRangeToTodayISO } from "../utils/scheduleTime.js";
 
-const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
+// Read + create/update events (user must reconnect after scope change)
+const SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
 export function createOAuthClient() {
   assertGoogleOAuth();
@@ -72,15 +74,99 @@ function formatTimeFromISO(iso) {
   return `${hours}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
 
-export async function fetchTodaysEvents() {
+function getCalendarApi() {
   const auth = getAuthenticatedClient();
   if (!auth) {
     const err = new Error("Not authenticated with Google Calendar");
     err.code = "NOT_AUTHENTICATED";
     throw err;
   }
+  return google.calendar({ version: "v3", auth });
+}
 
-  const calendar = google.calendar({ version: "v3", auth });
+/** Insert AI-scheduled slots into Google Calendar (skips calendar/free types). */
+export async function insertScheduleIntoCalendar(scheduleItems) {
+  const calendar = getCalendarApi();
+  const prefix = "[Todo10kr] ";
+
+  const toInsert = (scheduleItems || []).filter(
+    (s) => s && ["dump", "suggested", "break"].includes(s.type) && !s.gcalInserted
+  );
+
+  const results = [];
+
+  for (const slot of toInsert) {
+    let range;
+    try {
+      range = parseTimeRangeToTodayISO(slot.time);
+    } catch (err) {
+      results.push({
+        id: slot.id,
+        task: slot.task,
+        success: false,
+        error: err.message,
+      });
+      continue;
+    }
+
+    const description = [
+      slot.reason ? `Reason: ${slot.reason}` : null,
+      slot.type ? `Type: ${slot.type}` : null,
+      "Created by Todo10kr",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      const created = await calendar.events.insert({
+        calendarId: config.google.calendarId,
+        requestBody: {
+          summary: `${prefix}${slot.task}`,
+          description,
+          start: { dateTime: range.startISO },
+          end: { dateTime: range.endISO },
+        },
+      });
+
+      results.push({
+        id: slot.id,
+        task: slot.task,
+        success: true,
+        eventId: created.data.id,
+        htmlLink: created.data.htmlLink,
+      });
+    } catch (err) {
+      const googleMsg =
+        err?.response?.data?.error?.message ||
+        err?.errors?.[0]?.message ||
+        err?.message ||
+        "Unknown error";
+      const status = err?.response?.status || err?.code;
+      console.error("Calendar insert failed:", {
+        task: slot.task,
+        status,
+        googleMsg,
+        body: err?.response?.data,
+      });
+      results.push({
+        id: slot.id,
+        task: slot.task,
+        success: false,
+        status,
+        error: googleMsg,
+      });
+    }
+  }
+
+  return {
+    inserted: results.filter((r) => r.success).length,
+    failed: results.filter((r) => !r.success).length,
+    results,
+  };
+}
+
+export async function fetchTodaysEvents() {
+  const calendar = getCalendarApi();
 
   const response = await calendar.events.list({
     calendarId: config.google.calendarId,
