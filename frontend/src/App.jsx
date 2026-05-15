@@ -7,6 +7,7 @@ const slotStyles = {
   dump: 'border-l-indigo-500 bg-slate-50',
   suggested: 'border-l-violet-600 bg-violet-50/50',
   break: 'border-l-amber-400 bg-amber-50',
+  free: 'border-l-emerald-400 bg-emerald-50/80 border-dashed',
 }
 
 const badgeStyles = {
@@ -14,6 +15,14 @@ const badgeStyles = {
   dump: 'bg-indigo-500 text-white',
   suggested: 'bg-violet-600 text-white',
   break: 'bg-amber-400 text-amber-950',
+  free: 'bg-emerald-500 text-white',
+}
+
+function withScheduleIds(items) {
+  return (items || []).map((slot, i) => ({
+    ...slot,
+    id: slot.id || `slot-${Date.now()}-${i}`,
+  }))
 }
 
 function App() {
@@ -23,6 +32,7 @@ function App() {
   const [summary, setSummary] = useState('')
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [pushingToGCal, setPushingToGCal] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -130,7 +140,7 @@ function App() {
       })
       const data = await res.json()
       if (res.ok) {
-        setSchedule(data.schedule || [])
+        setSchedule(withScheduleIds(data.schedule))
         setSummary(data.summary || '')
         setStats(data.stats || null)
         if (data.source === 'gcal' && data.calendarEvents) {
@@ -149,6 +159,96 @@ function App() {
       setLoading(false)
     }
   }
+
+  const clearScheduleSlot = (id) => {
+    setSchedule((prev) =>
+      prev.map((slot) =>
+        slot.id === id
+          ? {
+              ...slot,
+              type: 'free',
+              task: 'Free time',
+              reason: 'You cleared this task — this slot is available again',
+              cleared: true,
+              gcalInserted: false,
+            }
+          : slot
+      )
+    )
+    setNotice('Slot cleared — marked as free time')
+  }
+
+  const insertIntoGoogleCalendar = async () => {
+    if (!gcalConnected) {
+      setError('Connect Google Calendar first')
+      return
+    }
+
+    const pushable = schedule.filter(
+      (s) => ['dump', 'suggested', 'break'].includes(s.type) && !s.gcalInserted
+    )
+
+    if (pushable.length === 0) {
+      setNotice('No tasks to insert (only new dump/suggested/break slots can be pushed)')
+      return
+    }
+
+    setPushingToGCal(true)
+    setError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/gcal/events/push-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule: pushable }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        const successIds = new Set(
+          (data.results || []).filter((r) => r.success && r.id).map((r) => r.id)
+        )
+        setSchedule((prev) =>
+          prev.map((slot) =>
+            successIds.has(slot.id) ? { ...slot, gcalInserted: true } : slot
+          )
+        )
+
+        if (data.needsReconnect && data.inserted === 0) {
+          const firstErr =
+            (data.results || []).find((r) => !r.success)?.error || 'permission denied'
+          setError(
+            `Google denied write access (${firstErr}). Click Disconnect, then Connect Google Calendar again to grant write permission.`
+          )
+        } else if (data.inserted > 0) {
+          setNotice(
+            `Inserted ${data.inserted} event(s) into Google Calendar` +
+              (data.failed ? ` (${data.failed} failed — check console)` : '')
+          )
+        } else {
+          const firstErr =
+            (data.results || []).find((r) => !r.success)?.error || 'no events inserted'
+          setError(`Insert failed: ${firstErr}`)
+        }
+      } else {
+        if (data.needsReconnect) {
+          setError(
+            `Google denied write access (${data.message || data.error}). Click Disconnect, then Connect Google Calendar again to grant write permission.`
+          )
+        } else {
+          setError(data.message || data.error || 'Failed to insert into calendar')
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Failed to insert into Google Calendar')
+    } finally {
+      setPushingToGCal(false)
+    }
+  }
+
+  const pushableCount = schedule.filter(
+    (s) => ['dump', 'suggested', 'break'].includes(s.type) && !s.gcalInserted
+  ).length
 
   const inputClass =
     'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
@@ -348,17 +448,38 @@ function App() {
               <div>
                 <h2 className="text-2xl font-semibold text-indigo-600">AI-Optimized Schedule</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  AI fills your free slots with the perfect tasks
+                  Delete tasks to free slots · Insert the plan into Google Calendar
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={generateSmartSchedule}
-                disabled={loading}
-                className="shrink-0 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-700 hover:to-violet-700 hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? 'Generating...' : '🤖 Generate Smart Schedule'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={generateSmartSchedule}
+                  disabled={loading}
+                  className="shrink-0 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? 'Generating...' : '🤖 Generate'}
+                </button>
+                {schedule.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={insertIntoGoogleCalendar}
+                    disabled={!gcalConnected || pushingToGCal || pushableCount === 0}
+                    title={
+                      !gcalConnected
+                        ? 'Connect Google Calendar first'
+                        : pushableCount === 0
+                          ? 'All tasks already inserted or none to push'
+                          : `Insert ${pushableCount} task(s) into Google Calendar`
+                    }
+                    className="shrink-0 rounded-lg border-2 border-indigo-600 bg-white px-5 py-3 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {pushingToGCal
+                      ? 'Inserting...'
+                      : `📅 Insert into Calendar (${pushableCount})`}
+                  </button>
+                )}
+              </div>
             </div>
 
             {error && (
@@ -404,27 +525,48 @@ function App() {
 
             {schedule.length > 0 && (
               <ul className="mt-6 space-y-3">
-                {schedule.map((slot, idx) => {
+                {schedule.map((slot) => {
                   const type = slot.type || 'dump'
+                  const canClear = ['dump', 'suggested', 'break'].includes(type)
                   return (
                     <li
-                      key={idx}
-                      className={`grid gap-3 rounded-xl border-l-4 p-4 sm:grid-cols-[10rem_1fr] ${slotStyles[type] || slotStyles.dump}`}
+                      key={slot.id}
+                      className={`grid gap-3 rounded-xl border-l-4 p-4 sm:grid-cols-[10rem_1fr_auto] ${slotStyles[type] || slotStyles.dump}`}
                     >
                       <p className="text-sm font-semibold text-slate-600">{slot.time}</p>
                       <div>
                         <p className="font-semibold text-slate-900">
                           {type === 'calendar' && '📅 '}
+                          {type === 'free' && '✨ '}
                           {slot.task}
                         </p>
                         {slot.reason && (
                           <p className="mt-1 text-sm text-slate-500">{slot.reason}</p>
                         )}
-                        <span
-                          className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeStyles[type] || badgeStyles.dump}`}
-                        >
-                          {type === 'calendar' ? 'existing event' : type}
-                        </span>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeStyles[type] || badgeStyles.dump}`}
+                          >
+                            {type === 'calendar' ? 'existing event' : type}
+                          </span>
+                          {slot.gcalInserted && (
+                            <span className="inline-block rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-bold text-sky-700">
+                              on calendar
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-end sm:pt-0">
+                        {canClear && type !== 'free' && (
+                          <button
+                            type="button"
+                            onClick={() => clearScheduleSlot(slot.id)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                            title="Remove task and mark this time as free"
+                          >
+                            Clear → free
+                          </button>
+                        )}
                       </div>
                     </li>
                   )
