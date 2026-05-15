@@ -8,3 +8,8 @@ export const updateGoal = (id, body) =>
 export const deleteGoal = (id) => apiFetch(`/api/goals/${id}`, { method: 'DELETE' })
 export const proposeForGoal = (id) =>
   apiFetch(`/api/goals/${id}/propose`, { method: 'POST' })
+export const addGoalNote = (id, text) =>
+  apiFetch(`/api/goals/${id}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })

@@ -1,13 +1,14 @@
 import { NavLink } from 'react-router-dom'
 
 const items = [
-  { to: '/', label: 'Dashboard', icon: '🗓️', end: true },
-  { to: '/goals', label: 'Milestones', icon: '🎯' },
+  { to: '/', label: 'Today', end: true },
+  { to: '/goals', label: 'Milestones' },
+  { to: '/calendar', label: 'Calendar' },
 ]
 
 export default function MobileNav() {
   return (
-    <nav className="sticky top-0 z-30 flex gap-2 border-b border-white/10 bg-slate-950/80 px-3 py-2 text-white backdrop-blur md:hidden">
+    <nav className="sticky top-0 z-30 flex gap-1 border-b border-slate-200 bg-white px-3 py-2 md:hidden">
       {items.map((item) => (
         <NavLink
           key={item.to}
@@ -15,12 +16,11 @@ export default function MobileNav() {
           end={item.end}
           className={({ isActive }) =>
             [
-              'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-              isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-white/5',
+              'flex flex-1 items-center justify-center rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              isActive ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50',
             ].join(' ')
           }
         >
-          <span>{item.icon}</span>
           {item.label}
         </NavLink>
       ))}
