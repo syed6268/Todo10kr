@@ -40,3 +40,6 @@ coverage
 
 # TypeScript (harmless if you use JS-only template)
 *.tsbuildinfo
+# Project documentation & context files outside frontend
+../pitch
+../README.md
