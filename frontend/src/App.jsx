@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5001'
 
 const slotStyles = {
   calendar: 'border-l-sky-500 bg-sky-50',
@@ -22,6 +24,11 @@ function App() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const [gcalConnected, setGcalConnected] = useState(false)
+  const [useGCal, setUseGCal] = useState(false)
+  const [fetchingEvents, setFetchingEvents] = useState(false)
 
   const [calendarEvents, setCalendarEvents] = useState([
     { id: 1, title: 'Team standup', startTime: '9:00 AM', endTime: '9:30 AM' },
@@ -29,20 +36,72 @@ function App() {
   ])
   const [newEvent, setNewEvent] = useState({ title: '', startTime: '', endTime: '' })
 
-  useEffect(() => {
-    fetchTodos()
+  const checkGCalStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/google/status`)
+      const data = await res.json()
+      setGcalConnected(Boolean(data.connected))
+      return Boolean(data.connected)
+    } catch {
+      return false
+    }
   }, [])
 
-  const fetchTodos = async () => {
+  const fetchTodos = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/todos')
-      const data = await response.json()
+      const res = await fetch(`${API_BASE}/api/todos`)
+      const data = await res.json()
       setDumpTodos(data.dumpTodos)
       setSuggestedTodos(data.suggestedTodos)
     } catch (err) {
       console.error('Error fetching todos:', err)
       setError('Failed to load todos')
     }
+  }, [])
+
+  const fetchGCalEvents = useCallback(async () => {
+    setFetchingEvents(true)
+    setError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/gcal/events/today`)
+      const data = await res.json()
+      if (res.ok) {
+        setCalendarEvents(data.events.map((e, i) => ({ ...e, id: e.id || `gcal-${i}` })))
+        setNotice(`Loaded ${data.count} event(s) from Google Calendar`)
+      } else {
+        setError(data.message || data.error || 'Failed to fetch GCal events')
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Failed to fetch GCal events')
+    } finally {
+      setFetchingEvents(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchTodos()
+    checkGCalStatus()
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('gcal') === 'connected') {
+      setNotice('Google Calendar connected successfully!')
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('gcal') === 'error') {
+      setError('Google Calendar connection failed.')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [fetchTodos, checkGCalStatus])
+
+  const connectGoogle = () => {
+    window.location.href = `${API_BASE}/api/auth/google`
+  }
+
+  const disconnectGoogle = async () => {
+    await fetch(`${API_BASE}/api/auth/google/disconnect`, { method: 'POST' })
+    setGcalConnected(false)
+    setUseGCal(false)
+    setNotice('Google Calendar disconnected')
   }
 
   const addCalendarEvent = () => {
@@ -59,19 +118,29 @@ function App() {
   const generateSmartSchedule = async () => {
     setLoading(true)
     setError('')
+    setNotice('')
     try {
-      const response = await fetch('http://localhost:5001/api/generate-schedule-v2', {
+      const res = await fetch(`${API_BASE}/api/schedule/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ calendarEvents }),
+        body: JSON.stringify({
+          calendarEvents,
+          useGCal: useGCal && gcalConnected,
+        }),
       })
-      const data = await response.json()
-      if (response.ok) {
+      const data = await res.json()
+      if (res.ok) {
         setSchedule(data.schedule || [])
         setSummary(data.summary || '')
         setStats(data.stats || null)
+        if (data.source === 'gcal' && data.calendarEvents) {
+          setCalendarEvents(
+            data.calendarEvents.map((e, i) => ({ ...e, id: e.id || `gcal-${i}` }))
+          )
+          setNotice(`Used ${data.calendarEvents.length} live Google Calendar event(s)`)
+        }
       } else {
-        setError(data.message || 'Failed to generate schedule')
+        setError(data.message || data.error || 'Failed to generate schedule')
       }
     } catch (err) {
       console.error('Error generating schedule:', err)
@@ -90,15 +159,76 @@ function App() {
         <header className="mb-10 text-center text-white">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Todo10kr v2</h1>
           <p className="mt-2 text-lg text-indigo-100">
-            AI-powered calendar integration & intelligent scheduling
+            AI-powered Google Calendar integration & intelligent scheduling
           </p>
         </header>
 
         <main className="flex flex-col gap-6">
+          {/* Google Calendar connection */}
           <section className="rounded-2xl bg-white p-6 shadow-xl shadow-black/10 sm:p-8">
-            <h2 className="text-2xl font-semibold text-indigo-600">Your Calendar Events</h2>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-indigo-600">Google Calendar</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {gcalConnected
+                    ? 'Connected — your real calendar events can be used for scheduling.'
+                    : 'Connect to pull your actual events for today.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {gcalConnected ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={fetchGCalEvents}
+                      disabled={fetchingEvents}
+                      className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {fetchingEvents ? 'Loading...' : 'Pull today\u2019s events'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={disconnectGoogle}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={connectGoogle}
+                    className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Connect Google Calendar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 text-sm">
+              <input
+                id="useGCal"
+                type="checkbox"
+                checked={useGCal}
+                disabled={!gcalConnected}
+                onChange={(e) => setUseGCal(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+              />
+              <label
+                htmlFor="useGCal"
+                className={gcalConnected ? 'text-slate-700' : 'text-slate-400'}
+              >
+                When generating, fetch live events from Google Calendar
+              </label>
+            </div>
+          </section>
+
+          {/* Calendar input */}
+          <section className="rounded-2xl bg-white p-6 shadow-xl shadow-black/10 sm:p-8">
+            <h2 className="text-2xl font-semibold text-indigo-600">Calendar Events</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Add your existing calendar events so AI can fill the gaps
+              Events used for free-slot detection. Add manual events or pull from Google Calendar.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto]">
@@ -126,22 +256,35 @@ function App() {
               <button
                 type="button"
                 onClick={addCalendarEvent}
-                className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
               >
                 + Add
               </button>
             </div>
 
             <ul className="mt-4 space-y-2">
+              {calendarEvents.length === 0 && (
+                <li className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  No events yet. Add one or pull from Google Calendar.
+                </li>
+              )}
               {calendarEvents.map((event) => (
                 <li
                   key={event.id}
                   className="flex items-center justify-between rounded-lg border-l-4 border-indigo-500 bg-slate-50 px-4 py-3"
                 >
                   <div>
-                    <p className="font-semibold text-slate-800">{event.title}</p>
+                    <p className="font-semibold text-slate-800">
+                      {event.source === 'gcal' && '📅 '}
+                      {event.title}
+                    </p>
                     <p className="text-sm text-slate-500">
                       {event.startTime} – {event.endTime}
+                      {event.source === 'gcal' && (
+                        <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+                          gcal
+                        </span>
+                      )}
                     </p>
                   </div>
                   <button
@@ -157,6 +300,7 @@ function App() {
             </ul>
           </section>
 
+          {/* Todos */}
           <div className="grid gap-6 md:grid-cols-2">
             <section className="rounded-2xl bg-white p-6 shadow-xl shadow-black/10 sm:p-8">
               <h2 className="text-xl font-semibold text-slate-800">Dump Todos</h2>
@@ -198,6 +342,7 @@ function App() {
             </section>
           </div>
 
+          {/* Schedule */}
           <section className="rounded-2xl bg-white p-6 shadow-xl shadow-black/10 sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -222,11 +367,17 @@ function App() {
               </p>
             )}
 
+            {notice && !error && (
+              <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-center text-sm font-medium text-emerald-700">
+                {notice}
+              </p>
+            )}
+
             {stats && (
               <div className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-pink-50 p-5 lg:grid-cols-4">
                 {[
                   ['Free Slots Found', stats.freeSlots],
-                  ['Total Free Time', `${stats.totalFreeMinutes} min`],
+                  ['Total Free Time', `${stats.totalFreeMinutes ?? 0} min`],
                   ['Dump Tasks Scheduled', stats.dumpScheduled || 0],
                   ['Growth Tasks Added', stats.suggestedScheduled || 0],
                 ].map(([label, value]) => (
@@ -246,8 +397,8 @@ function App() {
 
             {schedule.length === 0 && !loading && !error && (
               <p className="mt-8 text-center text-sm italic text-slate-400">
-                Add your calendar events above, then click &quot;Generate Smart Schedule&quot; to
-                let AI optimize your day.
+                Add calendar events (or pull from Google), then click &quot;Generate Smart
+                Schedule&quot;.
               </p>
             )}
 
@@ -263,7 +414,7 @@ function App() {
                       <p className="text-sm font-semibold text-slate-600">{slot.time}</p>
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {slot.type === 'calendar' && '📅 '}
+                          {type === 'calendar' && '📅 '}
                           {slot.task}
                         </p>
                         {slot.reason && (

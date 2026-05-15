@@ -1,2 +1,4 @@
 pitch.md
-README.md
+node_modules
+.env
+backend/.tokens.json
