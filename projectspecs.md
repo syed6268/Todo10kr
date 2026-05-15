@@ -51,4 +51,34 @@ Having better understanding about me, my context, what am i doing in life etc th
 access to calendly and it sets the meeting with people, talk with people daily. learn new things in the market and mentor on what you need to  achieve better.
 
 
+------------------------------
+Plan for MVP v1:
+Phase 1 — Goals as first-class data (no agents yet) ✋ start here
+What: Add Goal model. UI to add/edit/list goals with horizon + priority. Goals appear as static context but don't yet generate anything.
 
+Why first: Nothing intelligent works without a goal model. You'll know it's done when you can add "Learn Spanish, 1 year, priority 3" and see it persisted.
+
+Files to add:
+
+backend/src/data/goals.js
+backend/src/routes/goals.routes.js (GET, POST, PATCH, DELETE)
+Frontend: a Goals section above your existing Dump/Suggested cards
+Phase 2 — One Goal Agent (single LLM call per goal)
+What: For each goal, write a function that asks the LLM to produce 1-3 candidate todos in JSON, given the goal + recent activity. No browser tools yet.
+
+Why second: Prove the agent shape before you have many. Use it to replace the static suggestedTodos array.
+
+Files to add:
+
+backend/src/services/goalAgent.service.js — runGoalAgent(goal, context)
+New endpoint: POST /api/goals/:id/propose returns this turn's candidates
+Frontend: a "Refresh suggestions" button per goal
+Phase 3 — Orchestrator that merges everything
+What: Refactor generateSmartSchedule into an orchestrator that takes dumpTodos + proposals[] + freeSlots and emits the daily plan with explicit reasoning per slot ("scheduled gym because last 3 completed items were job applications").
+
+Why third: This is where the intelligence shows up. Before this you just have suggestion lists; after this you have a real plan.
+
+Files to refactor:
+
+Rename services/openai.service.js#generateSmartSchedule → services/orchestrator.service.js#orchestrate
+Have schedule.routes.js call runGoalAgent for each active goal, collect proposals, then orchestrate(...)
