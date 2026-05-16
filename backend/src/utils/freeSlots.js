@@ -1,8 +1,22 @@
 import { parseTimeString, formatMinutes } from "./time.js";
 
-export function findFreeSlots(calendarEvents, { dayStartHour = 8, dayEndHour = 22 } = {}) {
+/**
+ * Find free slots in a day.
+ * @param {Array} calendarEvents
+ * @param {Object} opts
+ * @param {number} opts.dayStartHour
+ * @param {number} opts.dayEndHour
+ * @param {number|null} opts.minStartMinutes - earliest minute-of-day a slot can start
+ *   (used to skip already-past time when scheduling today)
+ */
+export function findFreeSlots(
+  calendarEvents,
+  { dayStartHour = 8, dayEndHour = 22, minStartMinutes = null } = {}
+) {
   const DAY_START = dayStartHour * 60;
   const DAY_END = dayEndHour * 60;
+  const lowerBound =
+    minStartMinutes != null ? Math.max(DAY_START, minStartMinutes) : DAY_START;
 
   const busy = (calendarEvents || [])
     .map((event) => ({
@@ -14,7 +28,7 @@ export function findFreeSlots(calendarEvents, { dayStartHour = 8, dayEndHour = 2
     .sort((a, b) => a.start - b.start);
 
   const freeSlots = [];
-  let cursor = DAY_START;
+  let cursor = lowerBound;
 
   for (const event of busy) {
     if (cursor < event.start) {

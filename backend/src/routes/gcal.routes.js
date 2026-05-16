@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  fetchTodaysEvents,
+  fetchEventsForDate,
   insertScheduleIntoCalendar,
   isAuthenticated,
 } from "../services/gcal.service.js";
@@ -15,9 +15,11 @@ router.get("/events/today", async (req, res) => {
     });
   }
 
+  const date = req.query.date || null;
+
   try {
-    const events = await fetchTodaysEvents();
-    res.json({ events, count: events.length });
+    const events = await fetchEventsForDate(date);
+    res.json({ events, count: events.length, date });
   } catch (err) {
     console.error("GCal fetch error:", err);
     res.status(500).json({ error: "Failed to fetch calendar events", message: err.message });
@@ -32,13 +34,13 @@ router.post("/events/push-schedule", async (req, res) => {
     });
   }
 
-  const { schedule = [] } = req.body || {};
+  const { schedule = [], date = null } = req.body || {};
   if (!Array.isArray(schedule) || schedule.length === 0) {
     return res.status(400).json({ error: "schedule array is required" });
   }
 
   try {
-    const result = await insertScheduleIntoCalendar(schedule);
+    const result = await insertScheduleIntoCalendar(schedule, date);
 
     const needsReconnect = (result.results || []).some(
       (r) =>

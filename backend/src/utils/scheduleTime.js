@@ -1,7 +1,7 @@
 import { parseTimeString } from "./time.js";
 
-/** Parse "8:00 AM - 9:30 AM" into ISO strings for today (local time). */
-export function parseTimeRangeToTodayISO(timeRange) {
+/** Parse "8:00 AM - 9:30 AM" into ISO strings for `dateStr` (YYYY-MM-DD) or today. */
+export function parseTimeRangeToTodayISO(timeRange, dateStr = null) {
   if (!timeRange || typeof timeRange !== "string") {
     throw new Error("Invalid time range");
   }
@@ -18,8 +18,8 @@ export function parseTimeRangeToTodayISO(timeRange) {
     throw new Error(`End time must be after start time: ${timeRange}`);
   }
 
-  const start = minutesToLocalDate(startMinutes);
-  const end = minutesToLocalDate(endMinutes);
+  const start = minutesToLocalDate(startMinutes, dateStr);
+  const end = minutesToLocalDate(endMinutes, dateStr);
 
   return {
     startISO: toLocalRFC3339(start),
@@ -29,8 +29,14 @@ export function parseTimeRangeToTodayISO(timeRange) {
   };
 }
 
-function minutesToLocalDate(minutes) {
-  const d = new Date();
+function minutesToLocalDate(minutes, dateStr = null) {
+  let d;
+  if (dateStr) {
+    const [y, m, day] = dateStr.split("-").map(Number);
+    d = new Date(y, m - 1, day);
+  } else {
+    d = new Date();
+  }
   d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   return d;
 }

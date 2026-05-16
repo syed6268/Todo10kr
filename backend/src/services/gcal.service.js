@@ -52,14 +52,21 @@ export function isAuthenticated() {
   return Boolean(getAuthenticatedClient());
 }
 
-function startOfTodayISO() {
-  const d = new Date();
+/** Parse YYYY-MM-DD (or null = today) into a local-midnight Date. */
+function parseLocalDate(dateStr) {
+  if (!dateStr) return new Date();
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function startOfDayISO(dateStr = null) {
+  const d = parseLocalDate(dateStr);
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 }
 
-function endOfTodayISO() {
-  const d = new Date();
+function endOfDayISO(dateStr = null) {
+  const d = parseLocalDate(dateStr);
   d.setHours(23, 59, 59, 999);
   return d.toISOString();
 }
@@ -85,7 +92,7 @@ function getCalendarApi() {
 }
 
 /** Insert AI-scheduled slots into Google Calendar (skips calendar/free types). */
-export async function insertScheduleIntoCalendar(scheduleItems) {
+export async function insertScheduleIntoCalendar(scheduleItems, dateStr = null) {
   const calendar = getCalendarApi();
   const prefix = "[Todo10kr] ";
 
@@ -98,7 +105,7 @@ export async function insertScheduleIntoCalendar(scheduleItems) {
   for (const slot of toInsert) {
     let range;
     try {
-      range = parseTimeRangeToTodayISO(slot.time);
+      range = parseTimeRangeToTodayISO(slot.time, dateStr);
     } catch (err) {
       results.push({
         id: slot.id,
@@ -165,13 +172,13 @@ export async function insertScheduleIntoCalendar(scheduleItems) {
   };
 }
 
-export async function fetchTodaysEvents() {
+export async function fetchEventsForDate(dateStr = null) {
   const calendar = getCalendarApi();
 
   const response = await calendar.events.list({
     calendarId: config.google.calendarId,
-    timeMin: startOfTodayISO(),
-    timeMax: endOfTodayISO(),
+    timeMin: startOfDayISO(dateStr),
+    timeMax: endOfDayISO(dateStr),
     singleEvents: true,
     orderBy: "startTime",
   });
@@ -191,3 +198,6 @@ export async function fetchTodaysEvents() {
       source: "gcal",
     }));
 }
+
+// Backwards-compat alias
+export const fetchTodaysEvents = () => fetchEventsForDate(null);
