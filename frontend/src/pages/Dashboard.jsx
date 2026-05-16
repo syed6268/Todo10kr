@@ -227,7 +227,7 @@ export default function Dashboard() {
   const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <div className="h-full overflow-y-auto bg-slate-50">
       <div className="mx-auto max-w-3xl px-6 py-10 sm:py-12">
         {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-3">
@@ -244,7 +244,7 @@ export default function Dashboard() {
               <rect x="3" y="5" width="18" height="16" rx="2" />
               <path d="M3 10h18M8 3v4M16 3v4" />
             </svg>
-            <span className="max-w-[9.5rem] text-right leading-snug sm:max-w-none sm:whitespace-nowrap">
+            <span className="max-w-38 text-right leading-snug sm:max-w-none sm:whitespace-nowrap">
               Open Calendar for Today
             </span>
             <svg className="h-3 w-3 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-400 sm:h-3.5 sm:w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

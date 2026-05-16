@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import { listTodos } from '../api/todos.js'
 import { listGoals } from '../api/goals.js'
 import { getStatus as getGcalStatus } from '../api/gcal.js'
@@ -14,49 +14,92 @@ function readSession(key, fallback) {
   }
 }
 
+function writeSession(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* quota / privacy mode — ignore */
+  }
+}
+
+export function todayKey() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const DEFAULT_EVENTS = [
-  { id: 1, title: 'Team standup', startTime: '9:00 AM', endTime: '9:30 AM' },
+  { id: 1, title: 'Team standup',  startTime: '9:00 AM', endTime: '9:30 AM' },
   { id: 2, title: 'Client meeting', startTime: '2:00 PM', endTime: '3:00 PM' },
 ]
 
 export function AppProvider({ children }) {
-  const [calendarEvents, _setCalendarEvents] = useState(() =>
-    readSession('cal_events', DEFAULT_EVENTS)
+  // ── per-date stores ──
+  const [selectedDate, setSelectedDate] = useState(todayKey())
+
+  const [eventsByDate,   _setEventsByDate]   = useState(() =>
+    readSession('events_by_date', { [todayKey()]: DEFAULT_EVENTS })
   )
-  const [schedule, _setSchedule] = useState(() => readSession('schedule', []))
-  const [summary, setSummary] = useState(() => readSession('summary', ''))
-  const [stats, setStats] = useState(() => readSession('stats', null))
-  const [deferred, setDeferred] = useState(() => readSession('deferred', []))
+  const [scheduleByDate, _setScheduleByDate] = useState(() =>
+    readSession('schedule_by_date', {})
+  )
+
+  // ── single-shot derived state (still per date) ──
+  const [summary,     setSummary]     = useState(() => readSession('summary', ''))
+  const [stats,       setStats]       = useState(() => readSession('stats', null))
+  const [deferred,    setDeferred]    = useState(() => readSession('deferred', []))
   const [activeGoals, setActiveGoals] = useState([])
-  const [proposals, setProposals] = useState([])
-  const [dumpTodos, setDumpTodos] = useState([])
+  const [proposals,   setProposals]   = useState([])
+
+  // ── global (not per-day) ──
+  const [dumpTodos,      setDumpTodos]      = useState([])
   const [suggestedTodos, setSuggestedTodos] = useState([])
-  const [goals, setGoals] = useState([])
-  const [gcalConnected, setGcalConnected] = useState(false)
-  const [useGCal, setUseGCal] = useState(false)
+  const [goals,          setGoals]          = useState([])
+  const [gcalConnected,  setGcalConnected]  = useState(false)
+  const [useGCal,        setUseGCal]        = useState(false)
 
-  const setCalendarEvents = useCallback((v) => {
-    const next = typeof v === 'function' ? v(readSession('cal_events', DEFAULT_EVENTS)) : v
-    sessionStorage.setItem('cal_events', JSON.stringify(next))
-    _setCalendarEvents(next)
-  }, [])
+  useEffect(() => writeSession('events_by_date',   eventsByDate),   [eventsByDate])
+  useEffect(() => writeSession('schedule_by_date', scheduleByDate), [scheduleByDate])
+  useEffect(() => writeSession('summary',  summary),  [summary])
+  useEffect(() => writeSession('stats',    stats),    [stats])
+  useEffect(() => writeSession('deferred', deferred), [deferred])
 
-  const setSchedule = useCallback((v) => {
-    const next = typeof v === 'function' ? v(readSession('schedule', [])) : v
-    sessionStorage.setItem('schedule', JSON.stringify(next))
-    _setSchedule(next)
-  }, [])
+  // ── date-scoped setters ──
+  const calendarEvents = useMemo(
+    () => eventsByDate[selectedDate] || [],
+    [eventsByDate, selectedDate]
+  )
+  const schedule = useMemo(
+    () => scheduleByDate[selectedDate] || [],
+    [scheduleByDate, selectedDate]
+  )
 
-  useEffect(() => {
-    sessionStorage.setItem('summary', JSON.stringify(summary))
-  }, [summary])
-  useEffect(() => {
-    sessionStorage.setItem('stats', JSON.stringify(stats))
-  }, [stats])
-  useEffect(() => {
-    sessionStorage.setItem('deferred', JSON.stringify(deferred))
-  }, [deferred])
+  const setCalendarEvents = useCallback(
+    (updater) => {
+      _setEventsByDate((prev) => {
+        const curr = prev[selectedDate] || []
+        const next = typeof updater === 'function' ? updater(curr) : updater
+        return { ...prev, [selectedDate]: next }
+      })
+    },
+    [selectedDate]
+  )
 
+  const setSchedule = useCallback(
+    (updater) => {
+      _setScheduleByDate((prev) => {
+        const curr = prev[selectedDate] || []
+        const next = typeof updater === 'function' ? updater(curr) : updater
+        return { ...prev, [selectedDate]: next }
+      })
+    },
+    [selectedDate]
+  )
+
+  // ── data fetchers ──
   const refreshTodos = useCallback(async () => {
     try {
       const data = await listTodos()
@@ -91,16 +134,24 @@ export function AppProvider({ children }) {
     checkGCal()
   }, [refreshTodos, refreshGoals, checkGCal])
 
+  const isToday = selectedDate === todayKey()
+
   return (
     <AppContext.Provider
       value={{
+        // date controls
+        selectedDate, setSelectedDate,
+        isToday,
+        // per-date state
         calendarEvents, setCalendarEvents,
         schedule, setSchedule,
+        // global derived
         summary, setSummary,
         stats, setStats,
         deferred, setDeferred,
         activeGoals, setActiveGoals,
         proposals, setProposals,
+        // global
         dumpTodos, setDumpTodos,
         suggestedTodos, setSuggestedTodos,
         goals, setGoals,

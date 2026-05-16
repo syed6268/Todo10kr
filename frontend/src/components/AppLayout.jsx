@@ -8,7 +8,7 @@ export default function AppLayout() {
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden">
         <MobileNav />
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           <Outlet />
         </div>
       </main>
