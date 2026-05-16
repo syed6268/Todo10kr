@@ -1,0 +1,41 @@
+[project]
+name = "milestone-agent"
+version = "0.1.0"
+description = "Local LLM research agent for long-term goal milestones (DayOS / 10kr take-home)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Mustafa Syed" }]
+license = { text = "MIT" }
+
+dependencies = [
+  "langgraph>=0.2.40",
+  "langchain-core>=0.3.20",
+  "langchain-ollama>=0.2.0",
+  "chromadb>=0.5.0",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.4",
+  "fastapi>=0.110",
+  "uvicorn>=0.30",
+  "typer>=0.12",
+  "httpx>=0.27",
+  "trafilatura>=1.10",
+  "pypdf>=4.3",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+milestone-agent = "milestone_agent.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

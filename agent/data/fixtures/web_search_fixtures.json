@@ -1,0 +1,82 @@
+[
+  {
+    "triggers": ["yc", "y combinator", "ycombinator", "incubator", "accelerator deadline"],
+    "results": [
+      {
+        "title": "Y Combinator Winter 2026 (W26) Application",
+        "url": "https://www.ycombinator.com/apply",
+        "snippet": "Applications for the W26 batch are open. Submit by the listed deadline; late applications are reviewed if space allows."
+      },
+      {
+        "title": "How to Apply to Y Combinator — Official Guide",
+        "url": "https://www.ycombinator.com/library/4A-how-to-apply-to-y-combinator",
+        "snippet": "Tips from YC partners on what makes a strong application: clarity, demo, founder-market fit."
+      },
+      {
+        "title": "YC Application Office Hours — schedule",
+        "url": "https://www.ycombinator.com/officehours",
+        "snippet": "Free 1:1 office hours available to founders considering applying."
+      }
+    ]
+  },
+  {
+    "triggers": ["seed investor", "ai investor", "early stage vc", "investor profile", "vc"],
+    "results": [
+      {
+        "title": "Garry Tan — President, Y Combinator",
+        "url": "https://www.ycombinator.com/people/garry-tan",
+        "snippet": "President of YC since 2023. Previously founded Initialized Capital. Active investor and writer on agentic AI."
+      },
+      {
+        "title": "Acme Ventures — Pre-seed AI Infrastructure",
+        "url": "https://acmeventures.example.com/about",
+        "snippet": "Acme Ventures invests $250k-$1M into pre-seed AI infrastructure and agent platforms."
+      },
+      {
+        "title": "Boldstart Ventures — Day-zero infrastructure",
+        "url": "https://boldstart.vc/portfolio",
+        "snippet": "First-check partner for technical founders building developer and infrastructure products."
+      },
+      {
+        "title": "South Park Commons — Founder Fellowship",
+        "url": "https://www.southparkcommons.com/fellowship",
+        "snippet": "Community-funded fellowship for founders between ideas; small checks, dense network."
+      }
+    ]
+  },
+  {
+    "triggers": ["spanish", "espanol", "language podcast", "intermediate spanish"],
+    "results": [
+      {
+        "title": "News in Slow Spanish — Intermediate Tier",
+        "url": "https://www.newsinslowspanish.com/intermediate",
+        "snippet": "Weekly intermediate-level news episodes with slowed delivery and grammar notes."
+      },
+      {
+        "title": "Notes in Spanish — Advanced Free Audio",
+        "url": "https://www.notesinspanish.com/advanced/",
+        "snippet": "Authentic conversations between native speakers; free audio with optional worksheets."
+      },
+      {
+        "title": "Dreaming Spanish — Comprehensible Input",
+        "url": "https://www.dreamingspanish.com",
+        "snippet": "Video-first comprehensible-input platform; intermediate playlists updated weekly."
+      }
+    ]
+  },
+  {
+    "triggers": ["productivity", "agentic", "ai agent", "todo app"],
+    "results": [
+      {
+        "title": "The Agentic Productivity Stack — 2026",
+        "url": "https://thesephist.com/posts/agentic-productivity/",
+        "snippet": "Survey of the emerging category of agents that manage long-horizon personal goals."
+      },
+      {
+        "title": "Building AI Copilots that Survive Week 2",
+        "url": "https://linear.app/blog/ai-copilot-retention",
+        "snippet": "Engineering teardown of two retention experiments that lifted week-2 active rates by 38%."
+      }
+    ]
+  }
+]

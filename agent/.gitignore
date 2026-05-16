@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+
+.env
+.tokens.json
+
+chroma_db/
+*.sqlite3
+*.log
+
+demos/*.json
+!demos/.gitkeep
